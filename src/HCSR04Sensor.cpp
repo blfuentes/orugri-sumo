@@ -17,8 +17,8 @@ HCSR04Sensor::HCSR04Sensor(gpio_num_t triggerPin, gpio_num_t echoPin)
 void HCSR04Sensor::init()
 {
     // Initialize the sensor
-    this->triggerPin.Configure();
     this->echoPin.Configure();
+    this->triggerPin.Configure();
 }
 
 float HCSR04Sensor::getDistance()

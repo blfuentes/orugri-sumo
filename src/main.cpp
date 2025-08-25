@@ -11,8 +11,8 @@
 static const char *HC_SR04_TAG = "hc-sr04_log";
 
 // HC SR04 Sensor pins
-constexpr gpio_num_t HC_SR04_TRIGGER = GPIO_NUM_9;
-constexpr gpio_num_t HC_SR04_ECHO = GPIO_NUM_10;
+constexpr gpio_num_t HC_SR04_TRIGGER = GPIO_NUM_12;
+constexpr gpio_num_t HC_SR04_ECHO = GPIO_NUM_14;
 
 extern "C" void app_main();
 
