@@ -7,7 +7,7 @@ PinGPIODefinition::PinGPIODefinition(){};
 
 PinGPIODefinition::PinGPIODefinition(gpio_num_t pin, gpio_mode_t mode, gpio_pulldown_t pull_down)
 {
-    printf("Creating pingpio %d\n", pin);
+    // printf("Creating pingpio %d\n", pin);
     this->pin = pin;
     this->mode = mode;
     this->pull_down = pull_down;
@@ -15,7 +15,7 @@ PinGPIODefinition::PinGPIODefinition(gpio_num_t pin, gpio_mode_t mode, gpio_pull
 
 void PinGPIODefinition::Configure()
 {
-    printf("Configuring pin %d\n", pin);
+    // printf("Configuring pin %d\n", pin);
     gpio_config_t io_conf = {};
     io_conf.intr_type = GPIO_INTR_DISABLE;
     io_conf.mode = mode;
