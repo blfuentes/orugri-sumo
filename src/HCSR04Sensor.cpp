@@ -57,7 +57,6 @@ float HCSR04Sensor::getDistance()
     return distance;
 }
 
-
 const char* HCSR04Sensor::errorMsg(int code)
 {
     switch (code)
