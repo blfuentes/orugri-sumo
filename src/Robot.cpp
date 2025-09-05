@@ -2,13 +2,13 @@
 #include <esp_log.h>
 
 #include "Robot.h"
+#include <driver/adc.h>
+#include <esp_adc_cal.h>
 
 // loggers
 static const char *HC_SR04_TAG = "hc-sr04_log";
 static const char *MOTOR_TAG = "motor_log";
 static const char* QRD_TAG = "qrd_log";
-
-RobotDefinition::RobotDefinition(){};
 
 constexpr std::array<const char*, 3> X_DirectionStrings = { "Right", "Center", "Left" };
 constexpr std::array<const char*, 3> Y_DirectionStrings = { "Forward", "Center", "Backward" };
@@ -23,36 +23,8 @@ const char* RobotDefinition::Y_DirectionToString(Y_Direction dir)
     return Y_DirectionStrings.at(static_cast<size_t>(dir));
 }
 
-// HC-SR04
-void init_hcsr04(HCSR04Sensor* hcsr04)
-{
-    ESP_LOGI(HC_SR04_TAG, "Creating HC-SR04 sensor...");
-    hcsr04 = new HCSR04Sensor(HC_SR04_TRIGGER, HC_SR04_ECHO);
-    ESP_LOGI(HC_SR04_TAG, "Initialisating HC-SR04 sensor...");
-    hcsr04->init();
-    ESP_LOGI(HC_SR04_TAG, "HC-SR04 sensor initialized.");
-}
-////////////////////////////////////////////////////////////////////////
 
 // MOTOR 
-void init_motor_control(MotorDefinition *rightMotor, MotorDefinition *leftMotor, PinGPIODefinition *stby)
-{
-    ESP_LOGI(MOTOR_TAG, "Configuring motors...");
-    *rightMotor = MotorDefinition(MOTOR_A_IN_1, MOTOR_A_IN_2, 0, 1, MOTOR_A_PWM, LEDC_CHANNEL_0, LEDC_SPEED_MODE, LEDC_TIMER_0);
-    ESP_LOGI(MOTOR_TAG, "Right motor configured on GPIO %d and %d", MOTOR_A_IN_1, MOTOR_A_IN_2);
-    *leftMotor = MotorDefinition(MOTOR_B_IN_1, MOTOR_B_IN_2, 1, 0, MOTOR_B_PWM, LEDC_CHANNEL_1, LEDC_SPEED_MODE, LEDC_TIMER_1);
-    ESP_LOGI(MOTOR_TAG, "Left motor configured on GPIO %d and %d", MOTOR_B_IN_1, MOTOR_B_IN_2);
-    *stby = PinGPIODefinition(STBY, GPIO_MODE_OUTPUT, GPIO_PULLDOWN_DISABLE);
-
-    // Configure motor control instances
-    rightMotor->Configure();
-    leftMotor->Configure();
-
-    // Configure STBY pin as output
-    stby->Configure();
-    gpio_set_level(stby->   Pin(), 1); // Set STBY high to enable the motors
-}
-
 void drive_motors(MotorDefinition* rightMotor, MotorDefinition* leftMotor, int speed)
 {
     rightMotor->Drive(speed);
@@ -63,13 +35,13 @@ void scan_environment(MotorDefinition* rightMotor, MotorDefinition* leftMotor,bo
 {
     if (*clockwise)
     {
-        ESP_LOGI(MOTOR_TAG, "Scanning clockwise");
+        ESP_LOGD(MOTOR_TAG, "Scanning clockwise");
         rightMotor->Drive(SCAN_SPEED);
         leftMotor->Drive(-SCAN_SPEED);
     }
     else
     {
-        ESP_LOGI(MOTOR_TAG, "Scanning counter-clockwise");
+        ESP_LOGD(MOTOR_TAG, "Scanning counter-clockwise");
         rightMotor->Drive(-SCAN_SPEED);
         leftMotor->Drive(SCAN_SPEED);
     }
@@ -80,15 +52,50 @@ void scan_environment(MotorDefinition* rightMotor, MotorDefinition* leftMotor,bo
 }
 
 ////////////////////////////////////////////////////////////////////////
-
-
-void RobotDefinition::Configure()
+RobotDefinition::RobotDefinition()
+    : leftMotor(MOTOR_B_IN_1, MOTOR_B_IN_2, 1, 0, MOTOR_B_PWM, LEDC_CHANNEL_1, LEDC_SPEED_MODE, LEDC_TIMER_1),
+      rightMotor(MOTOR_A_IN_1, MOTOR_A_IN_2, 0, 1, MOTOR_A_PWM, LEDC_CHANNEL_0, LEDC_SPEED_MODE, LEDC_TIMER_0),
+      stby(STBY, GPIO_MODE_OUTPUT, GPIO_PULLDOWN_DISABLE),
+      clockwise(true)
 {
     // init hr-sr04
-    init_hcsr04(hcsr04);
+    ESP_LOGI(HC_SR04_TAG, "Creating HC-SR04 sensor...");
+    hcsr04 = HCSR04Sensor(HC_SR04_TRIGGER, HC_SR04_ECHO);
+    ESP_LOGI(HC_SR04_TAG, "Initialisating HC-SR04 sensor...");
+    hcsr04.init();
+    ESP_LOGI(HC_SR04_TAG, "HC-SR04 sensor initialized.");
+
+    // init qrd1114 sensors
+    adc1_config_width(WIDTH);
+    ESP_LOGI(QRD_TAG, "Creating QRD1114 sensors...");
+    leftQrd1114 = QRD1114Sensor(LEFT_QRD1114_CHANNEL);
+    rightQrd1114 = QRD1114Sensor(RIGHT_QRD1114_CHANNEL);
+    ESP_LOGI(QRD_TAG, "Initialisating left QRD1114 sensor...");
+    leftQrd1114.init(ATTENUATION);
+    ESP_LOGI(QRD_TAG, "Initialisating right QRD1114 sensor...");
+    rightQrd1114.init(ATTENUATION);
+    ESP_LOGI(QRD_TAG, "QRD1114 sensors initialized.");
+    ESP_ERROR_CHECK(esp_adc_cal_characterize(ADC_UNIT_1, ATTENUATION, WIDTH, 1100, &adc_chars)); // 1100mV default Vref
 
     // init motors
-    init_motor_control(&rightMotor, &leftMotor, &stby);
+    ESP_LOGI(MOTOR_TAG, "Creating motors...");
+    ESP_LOGI(MOTOR_TAG, "Creating right motor...");
+    rightMotor = MotorDefinition(MOTOR_A_IN_1, MOTOR_A_IN_2, 0, 1, MOTOR_A_PWM, LEDC_CHANNEL_0, LEDC_SPEED_MODE, LEDC_TIMER_0);
+    ESP_LOGI(MOTOR_TAG, "Creating left motor...");
+    leftMotor = MotorDefinition(MOTOR_B_IN_1, MOTOR_B_IN_2, 1, 0, MOTOR_B_PWM, LEDC_CHANNEL_1, LEDC_SPEED_MODE, LEDC_TIMER_1);
+    ESP_LOGI(MOTOR_TAG, "Creating STBY pin...");
+    stby = PinGPIODefinition(STBY, GPIO_MODE_OUTPUT, GPIO_PULLDOWN_DISABLE);
+    
+    // Configure motor control instances
+    rightMotor.Configure();
+    ESP_LOGI(MOTOR_TAG, "Right motor configured on GPIO %d and %d", MOTOR_A_IN_1, MOTOR_A_IN_2);
+    leftMotor.Configure();
+    ESP_LOGI(MOTOR_TAG, "Left motor configured on GPIO %d and %d", MOTOR_B_IN_1, MOTOR_B_IN_2);
+
+    // Configure STBY pin as output
+    stby.Configure();
+    ESP_LOGI(MOTOR_TAG, "STBY pin configured on GPIO %d", STBY);
+    ESP_ERROR_CHECK(gpio_set_level(stby.Pin(), 1)); // Set STBY high to enable the motors
 }
 
 void RobotDefinition::Drive(Direction dir, int speed)
@@ -98,7 +105,7 @@ void RobotDefinition::Drive(Direction dir, int speed)
 
 void RobotDefinition::ScanEnvironment()
 {
-    scan_environment(&rightMotor, &leftMotor, clockwise);
+    scan_environment(&rightMotor, &leftMotor, &clockwise);
 }
 
 void RobotDefinition::Stop()
@@ -109,5 +116,18 @@ void RobotDefinition::Stop()
 
 float RobotDefinition::GetDistance()
 {
-    return hcsr04->getDistance();
+    ESP_LOGD("RobotDefinition", "Getting distance");
+    return hcsr04.getDistance();
+}
+
+QRD1114Data RobotDefinition::GetQRD1114Data()
+{
+    QRD1114Data data;
+    data.left = leftQrd1114.readData(&adc_chars);
+    data.right = rightQrd1114.readData(&adc_chars);
+    return data;
+}
+
+RobotDefinition::~RobotDefinition()
+{
 }

@@ -22,7 +22,7 @@ void PinGPIODefinition::Configure()
     io_conf.pin_bit_mask = 1ULL << pin;
     io_conf.pull_down_en = pull_down;
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    gpio_config(&io_conf);
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
 };
 
 PinPWMDefinition::PinPWMDefinition(){};
@@ -39,7 +39,7 @@ PinPWMDefinition::PinPWMDefinition(gpio_num_t pin, ledc_channel_t channel, ledc_
 void PinPWMDefinition::Configure()
 {
     // printf("Configuring pin %d\n", pin);
-    ledc_timer_config_t ledc_timer_motor;
+    ledc_timer_config_t ledc_timer_motor = {};
     ledc_timer_motor.duty_resolution = LEDC_TIMER_10_BIT;
     ledc_timer_motor.freq_hz = 20000; // Set output frequency at 1 kHz
     ledc_timer_motor.speed_mode = speed_mode;
@@ -48,7 +48,7 @@ void PinPWMDefinition::Configure()
     ledc_timer_motor.deconfigure = 0;
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer_motor));
 
-    ledc_channel_config_t ledc_channel_motor;
+    ledc_channel_config_t ledc_channel_motor = {};
     ledc_channel_motor.channel = channel;
     ledc_channel_motor.duty = 0;
     ledc_channel_motor.gpio_num = pin;

@@ -24,13 +24,19 @@ void HCSR04Sensor::init()
 float HCSR04Sensor::getDistance()
 {
     // Trigger the sensor
-    gpio_set_level(triggerPin.Pin(), 0);
+    ESP_LOGD("HCSR04Sensor", "Triggering sensor");
+    ESP_ERROR_CHECK(gpio_set_level(triggerPin.Pin(), 0));
+    ESP_LOGD("HCSR04Sensor", "Waiting for 2us");
     esp_rom_delay_us(2);
-    gpio_set_level(triggerPin.Pin(), 1);
+    ESP_LOGD("HCSR04Sensor", "Setting trigger high for 10us");
+    ESP_ERROR_CHECK(gpio_set_level(triggerPin.Pin(), 1));
+    ESP_LOGD("HCSR04Sensor", "Waiting for 10us");
     esp_rom_delay_us(10);
-    gpio_set_level(triggerPin.Pin(), 0);
+    ESP_LOGD("HCSR04Sensor", "Setting trigger low");
+    ESP_ERROR_CHECK(gpio_set_level(triggerPin.Pin(), 0));
 
     // Wait for echo response
+    ESP_LOGD("HCSR04Sensor", "Waiting for echo response");
     int64_t startTime = esp_timer_get_time();
     while (gpio_get_level(echoPin.Pin()) == 0)
     {

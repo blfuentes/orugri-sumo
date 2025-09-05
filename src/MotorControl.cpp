@@ -1,5 +1,6 @@
 #include "MotorControl.h"
 #include "PinDefinition.h"
+#include <esp_log.h>
 
 MotorDefinition::MotorDefinition(){};
 
@@ -19,14 +20,16 @@ MotorDefinition::MotorDefinition(gpio_num_t in1, gpio_num_t in2, uint8_t in1_lev
 
 void MotorDefinition::Configure()
 {
-    // printf("Configuring motor\n");
     // Configure MOTOR_IN1 pin as output
+    ESP_LOGD(DIAGNOSTIG_MOTOR_TAG, "Configuring motor on IN1 pin %d", this->in1Def.Pin());
     this->in1Def.Configure();
 
     // Configure MOTOR_IN_2 pin as output
+    ESP_LOGD(DIAGNOSTIG_MOTOR_TAG, "Configuring motor on IN2 pin %d", this->in2Def.Pin());
     this->in2Def.Configure();
 
     // Prepare and then apply the LEDC PWM timer configuration
+    ESP_LOGD(DIAGNOSTIG_MOTOR_TAG, "Configuring motor PWM on pin %d", this->pwmDef.Pin());
     this->pwmDef.Configure();
 };
 
