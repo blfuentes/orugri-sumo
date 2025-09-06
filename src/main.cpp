@@ -42,14 +42,16 @@ void app_main(void)
         {
             ESP_LOGI(MAIN_TAG, "Distance: %.2f cm", distance);
 
-            if (distance < 5.0)
+            if (distance < 15.0)
             {
-                ESP_LOGW(MAIN_TAG, "Object detected within 10 cm!");
-                robot.Drive(Direction{X_Direction::X_CENTER, Y_Direction::FORWARD}, DRIVE_SPEED);
+                ESP_LOGW(MAIN_TAG, "Object detected within 15 cm!");
+                robot.Drive(Direction{X_Direction::X_CENTER, Y_Direction::FORWARD}, MAX_DRIVE_SPEED);
             }
             else
             {
                 robot.ScanEnvironment();
+                distance = robot.GetDistance();
+                qrdData = robot.GetQRD1114Data();
             }
 
             ESP_LOGI(MAIN_TAG, "Left QRD1114 - Raw: %d, Voltage: %dmV", qrdData.left.raw, qrdData.left.voltage_mv);

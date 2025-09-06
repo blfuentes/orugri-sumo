@@ -30,8 +30,9 @@ constexpr gpio_num_t STBY = GPIO_NUM_33;
 constexpr ledc_mode_t LEDC_SPEED_MODE = LEDC_LOW_SPEED_MODE;
 
 constexpr int MAX_DRIVE_SPEED = 1023;
-constexpr int DRIVE_SPEED = 600;
-constexpr int SCAN_SPEED = 1023;
+constexpr int DRIVE_SPEED = 850;
+constexpr int SCAN_SPEED = 600;
+constexpr int MAX_SCAN_STEP = 6;
 
 typedef enum {
     RIGHT = 0,
@@ -69,7 +70,9 @@ class RobotDefinition {
     int leftCorrection;
     int rightCorrection;
 
+    // scan control
     bool clockwise = true;
+    int scanStep = 0;
 
     // stored data
     float distance;

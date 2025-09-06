@@ -86,31 +86,62 @@ void RobotDefinition::Drive(Direction dir, int speed)
 
 void RobotDefinition::ScanEnvironment()
 {
-    if (clockwise)
+    bool continueScan = true;
+    if (scanStep++ > MAX_SCAN_STEP)
     {
-        ESP_LOGD(MOTOR_TAG, "Scanning clockwise");
-        // step back 1/5 second
-        drive_motors(&rightMotor, &leftMotor, -SCAN_SPEED);
-        vTaskDelay(pdMS_TO_TICKS(100));
-        Stop();
-        vTaskDelay(pdMS_TO_TICKS(100));
-        // turn right
-        rightMotor.Drive(-SCAN_SPEED);
-        leftMotor.Drive(SCAN_SPEED);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        Stop();
-        vTaskDelay(pdMS_TO_TICKS(100));
-        // step forward 1/5 second
+        scanStep = 0;
+        // move forward
         drive_motors(&rightMotor, &leftMotor, SCAN_SPEED);
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(500));
         Stop();
         vTaskDelay(pdMS_TO_TICKS(100));
-    }
+    } 
     else
     {
-        ESP_LOGD(MOTOR_TAG, "Scanning counter-clockwise");
-        rightMotor.Drive(-SCAN_SPEED);
-        leftMotor.Drive(SCAN_SPEED);
+        if (clockwise)
+        {
+            ESP_LOGD(MOTOR_TAG, "Scanning clockwise");
+            // step back 1/5 second
+            drive_motors(&rightMotor, &leftMotor, -SCAN_SPEED);
+            vTaskDelay(pdMS_TO_TICKS(100));
+            Stop();
+            vTaskDelay(pdMS_TO_TICKS(100));
+            // turn right
+            for(int c = 0; c < 20; c++) // turn for 2 seconds
+            {
+                rightMotor.Drive(-SCAN_SPEED);
+                leftMotor.Drive(SCAN_SPEED);
+                vTaskDelay(pdMS_TO_TICKS(50));
+                UpdateSensors();
+                if (distance < 15.0)
+                {
+                    ESP_LOGI(MOTOR_TAG, "Object detected during scan at %.2f cm, stopping scan", distance);
+                    continueScan = false;
+                    break;
+                }
+            }
+            if (!continueScan)
+            {
+                scanStep = 0;
+                return;
+            }
+            // rightMotor.Drive(-SCAN_SPEED);
+            // leftMotor.Drive(SCAN_SPEED);
+            // vTaskDelay(pdMS_TO_TICKS(1000));
+            Stop();
+            vTaskDelay(pdMS_TO_TICKS(100));
+            // step forward 1/5 second
+            drive_motors(&rightMotor, &leftMotor, SCAN_SPEED);
+            vTaskDelay(pdMS_TO_TICKS(100));
+            Stop();
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        else
+        {
+            ESP_LOGD(MOTOR_TAG, "Scanning counter-clockwise");
+            rightMotor.Drive(-SCAN_SPEED);
+            leftMotor.Drive(SCAN_SPEED);
+        }
     }
 }
 
