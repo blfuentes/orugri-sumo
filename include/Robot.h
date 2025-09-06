@@ -59,6 +59,7 @@ class RobotDefinition {
     HCSR04Sensor hcsr04;
     QRD1114Sensor leftQrd1114;
     QRD1114Sensor rightQrd1114;
+    esp_adc_cal_characteristics_t adc_chars;
 
     MotorDefinition leftMotor;
     MotorDefinition rightMotor;
@@ -70,27 +71,27 @@ class RobotDefinition {
 
     bool clockwise = true;
 
-    public:
-        RobotDefinition();
+    // stored data
+    float distance;
+    QRD1114Data qrdData;
 
-        // Motor control
-        void Drive(Direction dir, int speed);
-        void ScanEnvironment();
-        void Stop();
-
-        // Sensor data
-        float GetDistance();
-        const char* SensorErrorMsg(int code) { return hcsr04.errorMsg(code); }
-
-        const char* X_DirectionToString(X_Direction dir);
-        const char* Y_DirectionToString(Y_Direction dir);
-
-        // QRD1114 sensor data
-        QRD1114Data GetQRD1114Data();
-
-        ~RobotDefinition();
-private:
-    esp_adc_cal_characteristics_t adc_chars;
+public:
+    RobotDefinition();
+    // Motor control
+    void Drive(Direction dir, int speed);
+    void Stop();
+    void ScanEnvironment();
+    // Sensors
+    void UpdateSensors();
+    // Sensor data
+    float GetDistance();
+    const char* SensorErrorMsg(int code) { return hcsr04.errorMsg(code); }
+    const char* X_DirectionToString(X_Direction dir);
+    const char* Y_DirectionToString(Y_Direction dir);
+    // QRD1114 sensor data
+    QRD1114Data GetQRD1114Data();
+    
+    ~RobotDefinition();
 };
 
 #endif // __ROBOT_H__

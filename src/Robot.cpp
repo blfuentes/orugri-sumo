@@ -31,25 +31,6 @@ void drive_motors(MotorDefinition* rightMotor, MotorDefinition* leftMotor, int s
     leftMotor->Drive(speed);
 }
 
-void scan_environment(MotorDefinition* rightMotor, MotorDefinition* leftMotor,bool* clockwise)
-{
-    if (*clockwise)
-    {
-        ESP_LOGD(MOTOR_TAG, "Scanning clockwise");
-        rightMotor->Drive(SCAN_SPEED);
-        leftMotor->Drive(-SCAN_SPEED);
-    }
-    else
-    {
-        ESP_LOGD(MOTOR_TAG, "Scanning counter-clockwise");
-        rightMotor->Drive(-SCAN_SPEED);
-        leftMotor->Drive(SCAN_SPEED);
-    }
-    vTaskDelay(pdMS_TO_TICKS(500));
-    drive_motors(rightMotor, leftMotor, SCAN_SPEED);
-    vTaskDelay(pdMS_TO_TICKS(500));
-    *clockwise = !(*clockwise);
-}
 
 ////////////////////////////////////////////////////////////////////////
 RobotDefinition::RobotDefinition()
@@ -105,7 +86,32 @@ void RobotDefinition::Drive(Direction dir, int speed)
 
 void RobotDefinition::ScanEnvironment()
 {
-    scan_environment(&rightMotor, &leftMotor, &clockwise);
+    if (clockwise)
+    {
+        ESP_LOGD(MOTOR_TAG, "Scanning clockwise");
+        // step back 1/5 second
+        drive_motors(&rightMotor, &leftMotor, -SCAN_SPEED);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        Stop();
+        vTaskDelay(pdMS_TO_TICKS(100));
+        // turn right
+        rightMotor.Drive(-SCAN_SPEED);
+        leftMotor.Drive(SCAN_SPEED);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        Stop();
+        vTaskDelay(pdMS_TO_TICKS(100));
+        // step forward 1/5 second
+        drive_motors(&rightMotor, &leftMotor, SCAN_SPEED);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        Stop();
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    else
+    {
+        ESP_LOGD(MOTOR_TAG, "Scanning counter-clockwise");
+        rightMotor.Drive(-SCAN_SPEED);
+        leftMotor.Drive(SCAN_SPEED);
+    }
 }
 
 void RobotDefinition::Stop()
@@ -114,18 +120,22 @@ void RobotDefinition::Stop()
     leftMotor.Stop();
 }
 
+QRD1114Data RobotDefinition::GetQRD1114Data()
+{
+    return this->qrdData;
+}
+
 float RobotDefinition::GetDistance()
 {
     ESP_LOGD("RobotDefinition", "Getting distance");
-    return hcsr04.getDistance();
+    return this->distance;
 }
 
-QRD1114Data RobotDefinition::GetQRD1114Data()
+void RobotDefinition::UpdateSensors()
 {
-    QRD1114Data data;
-    data.left = leftQrd1114.readData(&adc_chars);
-    data.right = rightQrd1114.readData(&adc_chars);
-    return data;
+    distance = hcsr04.getDistance();
+    qrdData.left = leftQrd1114.readData(&adc_chars);
+    qrdData.right = rightQrd1114.readData(&adc_chars);
 }
 
 RobotDefinition::~RobotDefinition()
