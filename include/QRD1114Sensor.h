@@ -1,9 +1,6 @@
 #ifndef __QRD1114SENSOR_H__
 #define __QRD1114SENSOR_H__
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <driver/gpio.h>
 #include <driver/adc_types_legacy.h>
 #include <esp_adc_cal_types_legacy.h>
 #include <esp_log.h>

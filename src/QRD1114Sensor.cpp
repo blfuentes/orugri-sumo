@@ -1,7 +1,7 @@
+#include "QRD1114Sensor.h"
+
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
-
-#include "QRD1114Sensor.h"
 
 uint32_t read_qrd1114_raw(adc1_channel_t channel) {
     return adc1_get_raw(channel);

@@ -1,9 +1,9 @@
-#include <driver/gpio.h>
-#include <driver/ledc.h>
+#include "HCSR04Sensor.h"
+
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <rom/ets_sys.h>
 
-#include "HCSR04Sensor.h"
 #include "PinDefinition.h"
 
 HCSR04Sensor::HCSR04Sensor(){}

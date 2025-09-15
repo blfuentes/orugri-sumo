@@ -1,10 +1,19 @@
 #ifndef __ROBOT_H__
 #define __ROBOT_H__
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
+
+#include <driver/adc_types_legacy.h>
+#include <driver/gpio.h>
+#include <esp_adc_cal_types_legacy.h>
+
 #include "HCSR04Sensor.h"
 #include "MotorControl.h"
 #include "QRD1114Sensor.h"
-#include <esp_adc_cal_types_legacy.h>
 
 // HC SR04 Sensor data
 constexpr gpio_num_t HC_SR04_TRIGGER = GPIO_NUM_27;
@@ -74,27 +83,46 @@ class RobotDefinition {
     bool clockwise = true;
     int scanStep = 0;
 
-    // stored data
+    // Shared data
     float distance;
     QRD1114Data qrdData;
+    SemaphoreHandle_t dataMutex;
+
+    // Task handles
+    TaskHandle_t sensorTaskHandle;
+    TaskHandle_t behaviorTaskHandle;
 
 public:
     RobotDefinition();
+    
+    // Main method to start the robot's operation
+    void ScanAndAct();
+
+    // Thread safe access to shared data
+    void UpdateSensors();
+    float GetDistance();
+    QRD1114Data GetQRD1114Data();
+    const char* SensorErrorMsg(int code) { return hcsr04.errorMsg(code); }
+
     // Motor control
     void Drive(Direction dir, int speed);
     void Stop();
     void ScanEnvironment();
-    // Sensors
-    void UpdateSensors();
+
     // Sensor data
-    float GetDistance();
-    const char* SensorErrorMsg(int code) { return hcsr04.errorMsg(code); }
     const char* X_DirectionToString(X_Direction dir);
     const char* Y_DirectionToString(Y_Direction dir);
     // QRD1114 sensor data
-    QRD1114Data GetQRD1114Data();
     
     ~RobotDefinition();
+private:
+    // Static task wrappers to be called by FreeRTOS
+    static void sensor_update_task_wrapper(void *pvParameters);
+    static void robot_behavior_task_wrapper(void *pvParameters);
+
+    // The actual task logic as member functions
+    void sensor_update_task();
+    void robot_behavior_task();
 };
 
 #endif // __ROBOT_H__

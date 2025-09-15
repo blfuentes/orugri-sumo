@@ -9,8 +9,8 @@
 
 #include "PinDefinition.h"
 
-constexpr char* DIAGNOSTIG_MOTOR_TAG = "motor_log";    
-constexpr int DEFAULT_SPEED = 392;
+static const char *DIAGNOSTIC_MOTOR_TAG = "motor_log";
+static const int DEFAULT_SPEED = 392;
 
 // Motor definition
 class MotorDefinition {

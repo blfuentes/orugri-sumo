@@ -1,11 +1,12 @@
 #include <array>
+#include <driver/adc.h>
+#include <esp_adc_cal.h>
 #include <esp_log.h>
 
 #include "Robot.h"
-#include <driver/adc.h>
-#include <esp_adc_cal.h>
 
 // loggers
+static const char *ROBOT_TAG = "robot_log";
 static const char *HC_SR04_TAG = "hc-sr04_log";
 static const char *MOTOR_TAG = "motor_log";
 static const char* QRD_TAG = "qrd_log";
@@ -39,6 +40,12 @@ RobotDefinition::RobotDefinition()
       stby(STBY, GPIO_MODE_OUTPUT, GPIO_PULLDOWN_DISABLE),
       clockwise(true)
 {
+    // Create mutex for shared data
+    dataMutex = xSemaphoreCreateMutex();
+    if (dataMutex == NULL) {
+        ESP_LOGE("RobotDefinition", "Failed to create mutex for shared data");
+    }
+    
     // init hr-sr04
     ESP_LOGI(HC_SR04_TAG, "Creating HC-SR04 sensor...");
     hcsr04 = HCSR04Sensor(HC_SR04_TRIGGER, HC_SR04_ECHO);
@@ -79,6 +86,89 @@ RobotDefinition::RobotDefinition()
     ESP_ERROR_CHECK(gpio_set_level(stby.Pin(), 1)); // Set STBY high to enable the motors
 }
 
+void RobotDefinition::ScanAndAct()
+{
+    ESP_LOGI("RobotDefinition", "Scanning and acting...");
+
+    // Pin the sensor task to Core 0
+    xTaskCreatePinnedToCore(
+        &RobotDefinition::sensor_update_task_wrapper,
+        "Sensor Task",
+        4096,
+        this, // Pass a pointer to this instance
+        5,    // Higher priority
+        &sensorTaskHandle,
+        0);
+
+    // Pin the behavior task to Core 1
+    xTaskCreatePinnedToCore(
+        &RobotDefinition::robot_behavior_task_wrapper,
+        "Behavior Task",
+        4096,
+        this, // Pass a pointer to this instance
+        4,    // Lower priority
+        &behaviorTaskHandle,
+        1);
+}
+
+// Task implementation
+void RobotDefinition::sensor_update_task_wrapper(void *pvParameters)
+{
+    RobotDefinition *robot = static_cast<RobotDefinition*>(pvParameters);
+    robot->sensor_update_task();
+}
+
+void RobotDefinition::sensor_update_task()
+{
+    ESP_LOGI(ROBOT_TAG, "Sensor task started on Core 0");
+    for(;;)
+    {
+        UpdateSensors();
+        vTaskDelay(pdMS_TO_TICKS(50)); // Update sensors every 50 ms
+    }
+}
+
+void RobotDefinition::robot_behavior_task_wrapper(void *pvParameters)
+{
+    RobotDefinition *robot = static_cast<RobotDefinition*>(pvParameters);
+    robot->robot_behavior_task();
+}
+
+void RobotDefinition::robot_behavior_task()
+{
+    ESP_LOGI(ROBOT_TAG, "Behavior task started on Core 1");
+    float distance = 0.0;
+    QRD1114Data qrdData = { 0 };
+
+    for(;;)
+    {
+        distance = GetDistance();
+        qrdData = GetQRD1114Data();
+
+
+        if (distance < 0)
+        {
+            ESP_LOGE(ROBOT_TAG, "Distance error: %s", SensorErrorMsg(distance));
+        }
+        else
+        {
+            ESP_LOGI(ROBOT_TAG, "Distance: %.2f cm", distance);
+
+            if (distance < 15.0)
+            {
+                ESP_LOGW(ROBOT_TAG, "Object detected within 15 cm!");
+                Drive(Direction{X_Direction::X_CENTER, Y_Direction::FORWARD}, MAX_DRIVE_SPEED);
+            }
+            else
+            {
+                ScanEnvironment();
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100)); // Scan environment every 100 ms
+    }
+}
+
 void RobotDefinition::Drive(Direction dir, int speed)
 {
     drive_motors(&rightMotor, &leftMotor, speed);
@@ -112,7 +202,6 @@ void RobotDefinition::ScanEnvironment()
                 rightMotor.Drive(-SCAN_SPEED);
                 leftMotor.Drive(SCAN_SPEED);
                 vTaskDelay(pdMS_TO_TICKS(50));
-                UpdateSensors();
                 if (distance < 15.0)
                 {
                     ESP_LOGI(MOTOR_TAG, "Object detected during scan at %.2f cm, stopping scan", distance);
@@ -153,22 +242,55 @@ void RobotDefinition::Stop()
 
 QRD1114Data RobotDefinition::GetQRD1114Data()
 {
-    return this->qrdData;
+    ESP_LOGD("RobotDefinition", "Getting QRD1114 data");
+    QRD1114Data qrd_copy = this->qrdData;
+    if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        // copy the data
+        qrd_copy = this->qrdData;
+        xSemaphoreGive(dataMutex);
+    } else {
+        ESP_LOGE("RobotDefinition", "Failed to take mutex for getting QRD1114 data");
+    }
+    return qrd_copy;
 }
 
 float RobotDefinition::GetDistance()
 {
     ESP_LOGD("RobotDefinition", "Getting distance");
-    return this->distance;
+    float dist_copy;
+    if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        dist_copy = this->distance;
+        xSemaphoreGive(dataMutex);
+    } else {
+        ESP_LOGE("RobotDefinition", "Failed to take mutex for getting distance");
+        dist_copy = -1.0; // Indicate error
+    }
+    return dist_copy;
 }
 
 void RobotDefinition::UpdateSensors()
 {
-    distance = hcsr04.getDistance();
-    qrdData.left = leftQrd1114.readData(&adc_chars);
-    qrdData.right = rightQrd1114.readData(&adc_chars);
+    // Read sensors and update shared data
+    float current_distance = hcsr04.getDistance();
+    QRD1114Data current_qrdData;
+    current_qrdData.left = leftQrd1114.readData(&adc_chars);
+    current_qrdData.right = rightQrd1114.readData(&adc_chars);
+
+    // Update shared data with mutex protection
+    if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        distance = current_distance;
+        qrdData = current_qrdData;
+
+        // release the mutex
+        xSemaphoreGive(dataMutex);
+    } else {
+        ESP_LOGE("RobotDefinition", "Failed to take mutex for updating sensor data");
+    }
 }
 
 RobotDefinition::~RobotDefinition()
 {
+    if (dataMutex != NULL) {
+        vSemaphoreDelete(dataMutex);
+    }
 }
