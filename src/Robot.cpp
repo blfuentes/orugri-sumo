@@ -1,9 +1,7 @@
-#include <array>
-#include <driver/adc.h>
-#include <esp_adc_cal.h>
-#include <esp_log.h>
-
 #include "Robot.h"
+
+#include <array>
+#include <esp_log.h>
 
 // loggers
 static const char *ROBOT_TAG = "robot_log";
@@ -35,7 +33,10 @@ void drive_motors(MotorDefinition* rightMotor, MotorDefinition* leftMotor, int s
 
 ////////////////////////////////////////////////////////////////////////
 RobotDefinition::RobotDefinition()
-    : leftMotor(MOTOR_B_IN_1, MOTOR_B_IN_2, 1, 0, MOTOR_B_PWM, LEDC_CHANNEL_1, LEDC_SPEED_MODE, LEDC_TIMER_1),
+    : hcsr04(HC_SR04_TRIGGER, HC_SR04_ECHO),
+      leftQrd1114(ADC_UNIT_1, LEFT_QRD1114_CHANNEL),
+      rightQrd1114(ADC_UNIT_1, RIGHT_QRD1114_CHANNEL),
+      leftMotor(MOTOR_B_IN_1, MOTOR_B_IN_2, 1, 0, MOTOR_B_PWM, LEDC_CHANNEL_1, LEDC_SPEED_MODE, LEDC_TIMER_1),
       rightMotor(MOTOR_A_IN_1, MOTOR_A_IN_2, 0, 1, MOTOR_A_PWM, LEDC_CHANNEL_0, LEDC_SPEED_MODE, LEDC_TIMER_0),
       stby(STBY, GPIO_MODE_OUTPUT, GPIO_PULLDOWN_DISABLE),
       clockwise(true)
@@ -47,32 +48,35 @@ RobotDefinition::RobotDefinition()
     }
     
     // init hr-sr04
-    ESP_LOGI(HC_SR04_TAG, "Creating HC-SR04 sensor...");
-    hcsr04 = HCSR04Sensor(HC_SR04_TRIGGER, HC_SR04_ECHO);
     ESP_LOGI(HC_SR04_TAG, "Initialisating HC-SR04 sensor...");
     hcsr04.init();
     ESP_LOGI(HC_SR04_TAG, "HC-SR04 sensor initialized.");
 
     // init qrd1114 sensors
-    adc1_config_width(WIDTH);
-    ESP_LOGI(QRD_TAG, "Creating QRD1114 sensors...");
-    leftQrd1114 = QRD1114Sensor(LEFT_QRD1114_CHANNEL);
-    rightQrd1114 = QRD1114Sensor(RIGHT_QRD1114_CHANNEL);
+    ESP_LOGI(QRD_TAG, "Initialisating ADC unit for QRD1114 sensors...");
+    adc_oneshot_unit_init_cfg_t init_config = {
+        .unit_id = ADC_UNIT_1,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config, &adc_handle));
+
+    adc_cali_line_fitting_config_t cali_config = {
+        .unit_id = ADC_UNIT_1,
+        .atten = ATTENUATION,
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    };
+    esp_err_t ret = adc_cali_create_scheme_line_fitting(&cali_config, &cali_handle);
+    if (ret != ESP_OK) {
+        cali_handle = NULL;
+    }
+
     ESP_LOGI(QRD_TAG, "Initialisating left QRD1114 sensor...");
-    leftQrd1114.init(ATTENUATION);
+    leftQrd1114.init(adc_handle, cali_handle, ADC_ATTEN_DB_12);
     ESP_LOGI(QRD_TAG, "Initialisating right QRD1114 sensor...");
-    rightQrd1114.init(ATTENUATION);
+    rightQrd1114.init(adc_handle, cali_handle, ADC_ATTEN_DB_12);
     ESP_LOGI(QRD_TAG, "QRD1114 sensors initialized.");
-    ESP_ERROR_CHECK(esp_adc_cal_characterize(ADC_UNIT_1, ATTENUATION, WIDTH, 1100, &adc_chars)); // 1100mV default Vref
 
     // init motors
-    ESP_LOGI(MOTOR_TAG, "Creating motors...");
-    ESP_LOGI(MOTOR_TAG, "Creating right motor...");
-    rightMotor = MotorDefinition(MOTOR_A_IN_1, MOTOR_A_IN_2, 0, 1, MOTOR_A_PWM, LEDC_CHANNEL_0, LEDC_SPEED_MODE, LEDC_TIMER_0);
-    ESP_LOGI(MOTOR_TAG, "Creating left motor...");
-    leftMotor = MotorDefinition(MOTOR_B_IN_1, MOTOR_B_IN_2, 1, 0, MOTOR_B_PWM, LEDC_CHANNEL_1, LEDC_SPEED_MODE, LEDC_TIMER_1);
-    ESP_LOGI(MOTOR_TAG, "Creating STBY pin...");
-    stby = PinGPIODefinition(STBY, GPIO_MODE_OUTPUT, GPIO_PULLDOWN_DISABLE);
+    ESP_LOGI(MOTOR_TAG, "Configuring motors...");
     
     // Configure motor control instances
     rightMotor.Configure();
@@ -273,8 +277,8 @@ void RobotDefinition::UpdateSensors()
     // Read sensors and update shared data
     float current_distance = hcsr04.getDistance();
     QRD1114Data current_qrdData;
-    current_qrdData.left = leftQrd1114.readData(&adc_chars);
-    current_qrdData.right = rightQrd1114.readData(&adc_chars);
+    current_qrdData.left = leftQrd1114.readData(); // No longer needs adc_chars
+    current_qrdData.right = rightQrd1114.readData(); // No longer needs adc_chars
 
     // Update shared data with mutex protection
     if (xSemaphoreTake(dataMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
@@ -284,7 +288,7 @@ void RobotDefinition::UpdateSensors()
         // release the mutex
         xSemaphoreGive(dataMutex);
     } else {
-        ESP_LOGE("RobotDefinition", "Failed to take mutex for updating sensor data");
+        ESP_LOGE(ROBOT_TAG, "Failed to take mutex for updating sensor data");
     }
 }
 
@@ -292,5 +296,10 @@ RobotDefinition::~RobotDefinition()
 {
     if (dataMutex != NULL) {
         vSemaphoreDelete(dataMutex);
+    }
+    // De-initialize ADC
+    ESP_ERROR_CHECK(adc_oneshot_del_unit(adc_handle));
+    if (cali_handle) {
+        ESP_ERROR_CHECK(adc_cali_delete_scheme_line_fitting(cali_handle));
     }
 }

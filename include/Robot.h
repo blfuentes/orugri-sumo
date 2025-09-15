@@ -3,13 +3,10 @@
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 #include <freertos/semphr.h>
 
-#include <driver/adc_types_legacy.h>
 #include <driver/gpio.h>
-#include <esp_adc_cal_types_legacy.h>
+#include "esp_adc/adc_oneshot.h" // Use new ADC header
 
 #include "HCSR04Sensor.h"
 #include "MotorControl.h"
@@ -21,9 +18,8 @@ constexpr gpio_num_t HC_SR04_ECHO = GPIO_NUM_26;
 
 // LEFT|RIGHT qrd1114 SENSOR
 constexpr adc_atten_t ATTENUATION = ADC_ATTEN_DB_12;           // Full 3.3V range
-constexpr adc_bits_width_t WIDTH = ADC_WIDTH_BIT_12;
-constexpr adc1_channel_t LEFT_QRD1114_CHANNEL = ADC1_CHANNEL_6; // GPIO34 → ADC1_CHANNEL_6
-constexpr adc1_channel_t RIGHT_QRD1114_CHANNEL = ADC1_CHANNEL_7; // GPIO35 → ADC1_CHANNEL_7
+constexpr adc_channel_t LEFT_QRD1114_CHANNEL = ADC_CHANNEL_6; // GPIO34
+constexpr adc_channel_t RIGHT_QRD1114_CHANNEL = ADC_CHANNEL_7; // GPIO35
 
 // Driver motor data
 constexpr gpio_num_t MOTOR_A_IN_1 = GPIO_NUM_18;
@@ -69,7 +65,6 @@ class RobotDefinition {
     HCSR04Sensor hcsr04;
     QRD1114Sensor leftQrd1114;
     QRD1114Sensor rightQrd1114;
-    esp_adc_cal_characteristics_t adc_chars;
 
     MotorDefinition leftMotor;
     MotorDefinition rightMotor;
@@ -87,6 +82,10 @@ class RobotDefinition {
     float distance;
     QRD1114Data qrdData;
     SemaphoreHandle_t dataMutex;
+
+    // ADC handles
+    adc_oneshot_unit_handle_t adc_handle;
+    adc_cali_handle_t cali_handle;
 
     // Task handles
     TaskHandle_t sensorTaskHandle;
